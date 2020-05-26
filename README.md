@@ -1,103 +1,31 @@
-<p><img src="https://cdn.worldvectorlogo.com/logos/prometheus.svg" alt="prometheus logo" title="prometheus" align="right" height="60" /></p>
-
 # Ansible Role: prometheus
-
-[![Build Status](https://travis-ci.org/cloudalchemy/ansible-prometheus.svg?branch=master)](https://travis-ci.org/cloudalchemy/ansible-prometheus)
-[![License](https://img.shields.io/badge/license-MIT%20License-brightgreen.svg)](https://opensource.org/licenses/MIT)
-[![Ansible Role](https://img.shields.io/badge/ansible%20role-cloudalchemy.prometheus-blue.svg)](https://galaxy.ansible.com/cloudalchemy/prometheus/)
-[![GitHub tag](https://img.shields.io/github/tag/cloudalchemy/ansible-prometheus.svg)](https://github.com/cloudalchemy/ansible-prometheus/tags)
-
-## Description
-
-Deploy [Prometheus](https://github.com/prometheus/prometheus) monitoring system using ansible.
-
-### Upgradability notice
-
-When upgrading from <= 2.4.0 version of this role to >= 2.4.1 please turn off your prometheus instance. More in [2.4.1 release notes](https://github.com/cloudalchemy/ansible-prometheus/releases/tag/2.4.1)
+Deploy Prometheus monitoring system using ansible.
 
 ## Requirements
+- Ansible
+- Tox
 
-- Ansible >= 2.7 (It might work on previous versions, but we cannot guarantee it)
-- jmespath on deployer machine. If you are using Ansible from a Python virtualenv, install *jmespath* to the same virtualenv via pip.
-- gnu-tar on Mac deployer host (`brew install gnu-tar`)
-
-## Role Variables
-
-All variables which can be overridden are stored in [defaults/main.yml](defaults/main.yml) file as well as in table below.
-
-| Name           | Default Value | Description                        |
-| -------------- | ------------- | -----------------------------------|
-| `prometheus_version` | 2.18.1 | Prometheus package version. Also accepts `latest` as parameter. Only prometheus 2.x is supported |
-| `prometheus_skip_install` | false | Prometheus installation tasks gets skipped when set to true. |
-| `prometheus_binary_local_dir` | "" | Allows to use local packages instead of ones distributed on github. As parameter it takes a directory where `prometheus` AND `promtool` binaries are stored on host on which ansible is ran. This overrides `prometheus_version` parameter |
-| `prometheus_config_dir` | /etc/prometheus | Path to directory with prometheus configuration |
-| `prometheus_db_dir` | /var/lib/prometheus | Path to directory with prometheus database |
-| `prometheus_web_listen_address` | "0.0.0.0:9090" | Address on which prometheus will be listening |
-| `prometheus_web_external_url` | "" | External address on which prometheus is available. Useful when behind reverse proxy. Ex. `http://example.org/prometheus` |
-| `prometheus_storage_retention` | "30d" | Data retention period |
-| `prometheus_storage_retention_size` | "0" | Data retention period by size |
-| `prometheus_config_flags_extra` | {} | Additional configuration flags passed to prometheus binary at startup |
-| `prometheus_alertmanager_config` | [] | Configuration responsible for pointing where alertmanagers are. This should be specified as list in yaml format. It is compatible with official [<alertmanager_config>](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#alertmanager_config) |
-| `prometheus_alert_relabel_configs` | [] | Alert relabeling rules. This should be specified as list in yaml format. It is compatible with the official [<alert_relabel_configs>](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#alert_relabel_configs) |
-| `prometheus_global` | { scrape_interval: 60s, scrape_timeout: 15s, evaluation_interval: 15s } | Prometheus global config. Compatible with [official configuration](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#configuration-file) |
-| `prometheus_remote_write` | [] | Remote write. Compatible with [official configuration](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#<remote_write>) |
-| `prometheus_remote_read` | [] | Remote read. Compatible with [official configuration](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#<remote_read>) |
-| `prometheus_external_labels` | environment: "{{ ansible_fqdn \| default(ansible_host) \| default(inventory_hostname) }}" | Provide map of additional labels which will be added to any time series or alerts when communicating with external systems |
-| `prometheus_targets` | {} | Targets which will be scraped. Better example is provided in our [demo site](https://github.com/cloudalchemy/demo-site/blob/2a8a56fc10ce613d8b08dc8623230dace6704f9a/group_vars/all/vars#L8) |
-| `prometheus_scrape_configs` | [defaults/main.yml#L58](https://github.com/cloudalchemy/ansible-prometheus/blob/ff7830d06ba57be1177f2b6fca33a4dd2d97dc20/defaults/main.yml#L47) | Prometheus scrape jobs provided in same format as in [official docs](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#scrape_config) |
-| `prometheus_config_file` | "prometheus.yml.j2" | Variable used to provide custom prometheus configuration file in form of ansible template |
-| `prometheus_alert_rules` | [defaults/main.yml#L81](https://github.com/cloudalchemy/ansible-prometheus/blob/73d6df05a775ee5b736ac8f28d5605f2a975d50a/defaults/main.yml#L85) | Full list of alerting rules which will be copied to `{{ prometheus_config_dir }}/rules/ansible_managed.rules`. Alerting rules can be also provided by other files located in `{{ prometheus_config_dir }}/rules/` which have `*.rules` extension |
-| `prometheus_alert_rules_files` | [defaults/main.yml#L78](https://github.com/cloudalchemy/ansible-prometheus/blob/73d6df05a775ee5b736ac8f28d5605f2a975d50a/defaults/main.yml#L78) | List of folders where ansible will look for files containing alerting rules which will be copied to `{{ prometheus_config_dir }}/rules/`. Files must have `*.rules` extension |
-| `prometheus_static_targets_files` | [defaults/main.yml#L78](https://github.com/cloudalchemy/ansible-prometheus/blob/73d6df05a775ee5b736ac8f28d5605f2a975d50a/defaults/main.yml#L81) | List of folders where ansible will look for files containing custom static target configuration files which will be copied to `{{ prometheus_config_dir }}/file_sd/`. |
-
-
-### Relation between `prometheus_scrape_configs` and `prometheus_targets`
-
-#### Short version
-
-`prometheus_targets` is just a map used to create multiple files located in "{{ prometheus_config_dir }}/file_sd" directory. Where file names are composed from top-level keys in that map with `.yml` suffix. Those files store [file_sd scrape targets data](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#file_sd_config) and they need to be read in `prometheus_scrape_configs`.
-
-#### Long version
-
-A part of *prometheus.yml* configuration file which describes what is scraped by prometheus is stored in `prometheus_scrape_configs`. For this variable same configuration options as described in [prometheus docs](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#<scrape_config>) are used.
-
-Meanwhile `prometheus_targets` is our way of adopting [prometheus scrape type `file_sd`](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#<file_sd_config>). It defines a map of files with their content. A top-level keys are base names of files which need to have their own scrape job in `prometheus_scrape_configs` and values are a content of those files.
-
-All this mean that you CAN use custom `prometheus_scrape_configs` with `prometheus_targets` set to `{}`. However when you set anything in `prometheus_targets` it needs to be mapped to `prometheus_scrape_configs`. If it isn't you'll get an error in preflight checks.
-
-#### Example
-
-Lets look at our default configuration, which shows all features. By default we have this `prometheus_targets`:
 ```
-prometheus_targets:
-  node:  # This is a base file name. File is located in "{{ prometheus_config_dir }}/file_sd/<<BASENAME>>.yml"
-    - targets:              #
-        - localhost:9100    # All this is a targets section in file_sd format
-      labels:               #
-        env: test           #
-```
-Such config will result in creating one file named `node.yml` in `{{ prometheus_config_dir }}/file_sd` directory.
-
-Next this file needs to be loaded into scrape config. Here is modified version of our default `prometheus_scrape_configs`:
-```
-prometheus_scrape_configs:
-  - job_name: "prometheus"    # Custom scrape job, here using `static_config`
-    metrics_path: "/metrics"
-    static_configs:
-      - targets:
-          - "localhost:9090"
-  - job_name: "example-node-file-servicediscovery"
-    file_sd_configs:
-      - files:
-          - "{{ prometheus_config_dir }}/file_sd/node.yml" # This line loads file created from `prometheus_targets`
+sudo apt install -y ansible
+sudo apt install -y python-pip
+pip install tox
 ```
 
-## Example
+## Steps
+```
+git clone https://github.com/cloudalchemy/ansible-prometheus
+cd ansible-prometheus/
+mkdir -p roles/cloudalchemy.prometheus
+mv defaults/ handlers/ meta/ molecule/ tasks/ templates/ vars/ roles/cloudalchemy.prometheus
+```
 
-### Playbook
+Create the playbook:
+```
+nano main.yaml
+```
 
-```yaml
----
+Then copy and paste the following code:
+```
 - hosts: all
   roles:
   - cloudalchemy.prometheus
@@ -106,47 +34,112 @@ prometheus_scrape_configs:
       node:
       - targets:
         - localhost:9100
-        - demo.cloudalchemy.org:9100
         labels:
           env: demosite
 ```
 
-### Demo site
-
-Prometheus organization provide a demo site for full monitoring solution based on prometheus and grafana. Repository with code and links to running instances is [available on github](https://github.com/prometheus/demo-site).
-
-### Defining alerting rules files
-
-Alerting rules are defined in `prometheus_alert_rules` variable. Format is almost identical to one defined in[ Prometheus 2.0 documentation](https://prometheus.io/docs/prometheus/latest/configuration/template_examples/).
-Due to similarities in templating engines, every templates should be wrapped in `{% raw %}` and `{% endraw %}` statements. Example is provided in [defaults/main.yml](defaults/main.yml) file.
-
-## Local Testing
-
-The preferred way of locally testing the role is to use Docker and [molecule](https://github.com/metacloud/molecule) (v2.x). You will have to install Docker on your system. See "Get started" for a Docker package suitable to for your system.
-We are using tox to simplify process of testing on multiple ansible versions. To install tox execute:
-```sh
-pip3 install tox
+Create the inventory:
 ```
-To run tests on all ansible versions (WARNING: this can take some time)
-```sh
-tox
+nano inventory
 ```
-To run a custom molecule command on custom environment with only default test scenario:
-```sh
-tox -e py35-ansible28 -- molecule test -s default
+
+Then copy and paste the following code:
 ```
-For more information about molecule go to their [docs](http://molecule.readthedocs.io/en/latest/).
+localhost ansible_connection=local
+```
 
-If you would like to run tests on remote docker host just specify `DOCKER_HOST` variable before running tox tests.
+Run the playbook:
+```
+ansible-playbook -i inventory main.yaml
+```
 
-## Travis CI
+Install Node Exporter for more metrics:
+```
+curl -LO  https://github.com/prometheus/node_exporter/releases/download/v0.18.1/node_exporter-0.18.1.linux-amd64.tar.gz
+tar xzf node_exporter-0.18.1.linux-amd64.tar.gz
+cd node_exporter-0.18.1.linux-amd64/
+mv node_exporter /usr/local/bin/
+```
 
-Combining molecule and travis CI allows us to test how new PRs will behave when used with multiple ansible versions and multiple operating systems. This also allows use to create test scenarios for different role configurations. As a result we have a quite large test matrix which will take more time than local testing, so please be patient.
+Create node_exporter service:
+```
+sudo adduser --no-create-home --disabled-login --shell /bin/false --gecos "Node Exporter User" node_exporter
+sudo chown node_exporter:node_exporter /usr/local/bin/node_exporter
+sudo vi /etc/systemd/system/node_exporter.service
+```
+Add the following code in node_exporter.service:
+```
+[Unit]
+Description= Node Exporter
+After=network.target
 
-## Contributing
+[Service]
+User=node_exporter
+Group=node_exporter
+Type=simple
+ExecStart=/usr/local/bin/node_exporter
 
-See [contributor guideline](CONTRIBUTING.md).
+[Install]
+WantedBy=multi-user.target
+```
 
-## License
+Start the service and check the status:
+```
+sudo systemctl daemon-reload
+sudo systemctl start node_exporter
+sudo systemctl status node_exporter
+```
 
-This project is licensed under MIT License. See [LICENSE](/LICENSE) for more details.
+Modify the prometheus config file:
+```
+sudo vi /etc/prometheus/prometheus.yml
+```
+
+It should looks like the following(Change IP!):
+```
+global:
+  evaluation_interval: 15s
+  scrape_interval: 15s
+  scrape_timeout: 10s
+
+  external_labels:
+    environment: ip-172-********.us-west-1.compute.internal
+
+rule_files:
+  - /etc/prometheus/rules/*.rules
+
+scrape_configs:
+  - job_name: prometheus
+    metrics_path: /metrics
+    static_configs:
+    - targets:
+      - ip-172-********.us-west-1.compute.internal:9090
+  - file_sd_configs:
+    - files:
+      - /etc/prometheus/file_sd/node.yml
+    job_name: node
+  - job_name: 'node_exporter_metrics'
+    scrape_interval: 5s
+    static_configs:
+      - targets: ['localhost:9100']
+```
+
+Restart Prometheus and check status:
+```
+sudo systemctl restart prometheus
+sudo systemctl status prometheus
+```
+
+Prometheus service listens on port 9090.
+
+Install Grafana for graphing prometheus metrics:
+```
+cd ..
+curl -LO https://s3-us-west-2.amazonaws.com/grafana-releases/release/grafana_5.1.4_amd64.deb
+sudo apt-get install -y adduser libfontconfig
+sudo dpkg -i grafana_5.1.4_amd64.deb
+sudo systemctl start grafana-server
+sudo systemctl enable grafana-server
+```
+
+Grafana service listens on port 3000.
